@@ -1,31 +1,22 @@
-# Setup and maintenance
+# Setup
 
-## Prerequisites
+## Install
 
-- Pi coding agent
-- Node.js and npm
-- Git
-- `fd` and `rg` are recommended; the file-search extension can install verified fallback binaries when absent
-- Claude Code and Codex CLIs are optional subagent backends
-
-## Install on a new computer
-
-Clone the personal fork at the stable local-package path:
+Prerequisites: Pi, Node.js, npm, and Git. Claude Code and Codex are optional if you want those subagent backends.
 
 ```sh
 mkdir -p ~/projects
 git clone https://github.com/demattosanthony/my-pi-setup.git ~/projects/my-pi-setup
 cd ~/projects/my-pi-setup
-git remote add upstream https://github.com/davis7dotsh/my-pi-setup.git
-npm install
+npm ci
 npm run apply
 ```
 
-Start Pi and authenticate providers with `/login`. API keys and provider credentials are not stored in this repository.
+Start Pi, use `/login` to authenticate providers, then run `/reload`. Credentials and runtime state are not stored in this repository.
 
-The apply command registers the absolute checkout path as a local Pi package in `~/.pi/agent/settings.json`. Pi then loads resources directly from the checkout.
+Pi loads this checkout directly as a local package. There is no build or copy step.
 
-## Applying configuration
+## Apply configuration
 
 Preview changes:
 
@@ -41,24 +32,23 @@ npm run apply
 
 The apply script:
 
-1. Reads desired settings from `config/`.
-2. Preserves existing Pi-managed and unrecognized settings.
-3. Makes this checkout the first configured Pi package.
-4. Merges stable Better OpenAI preferences without resetting its dynamic runtime state.
-5. Backs up changed destination files under `~/.pi/backups/apply-*`.
-6. Writes files atomically.
+- Merges `config/settings.json` into `~/.pi/agent/settings.json`.
+- Registers the current checkout as the first local Pi package.
+- Merges stable Better OpenAI preferences without resetting runtime state.
+- Backs up changed files under `~/.pi/backups/apply-*`.
+- Writes changes atomically.
 
-It does not modify authentication, sessions, trust decisions, secrets, package caches, or workflow artifacts.
+It does not modify credentials, sessions, trust decisions, secrets, package caches, or workflow artifacts.
 
-## Daily development
+## Development
 
-Extensions, skills, prompts, and themes are loaded from the checkout itself:
+Pi reads extensions, skills, and themes directly from this checkout:
 
 ```text
-edit repository -> validate -> /reload
+edit -> validate -> /reload
 ```
 
-Recommended validation:
+Validate changes with:
 
 ```sh
 npm run format:check
@@ -66,71 +56,18 @@ npm run check
 npm test
 ```
 
-Use a full Pi restart after dependency changes or settings that affect startup.
+Run `npm ci` after pulling dependency changes. Restart Pi after dependency or startup-setting changes.
 
-## Adding a resource
+## Safety
 
-Add the source under the appropriate directory, then update the `pi` manifest in `package.json` when adding an extension entry point. Skills and themes are discovered from their declared directories.
-
-After adding a dependency, install it with npm rather than manually editing dependency versions:
-
-```sh
-npm install <package>
-```
-
-Use `npm install --workspace <workspace> <package>` for a dependency owned by one extension workspace.
-
-## Footer ownership
-
-`ui-customization` owns the replacement Pi footer. The tracked Better OpenAI config uses footer mode `status`, allowing its usage status to appear without replacing the custom dashboard footer.
-
-## Command ownership
-
-- `/pr` and `/pull-request` run the personal pull-request workflow.
-- `/review` runs the personal code-review workflow.
-
-## Security notes
-
-Extensions execute with the user's full permissions.
-
-The subagent extension can launch autonomous children:
-
-- Claude Code uses bypassed interactive permissions.
-- Codex uses danger-full-access with approvals disabled.
-- Pi children inherit most global resources.
-
-The workflow extension runs orchestration code in a permission-restricted Node child, but its child agents can still modify the current project. Review changes before committing and disable these entry points in the package manifest if this behavior is not desired.
-
-## Updating from upstream
-
-Keep personal changes on top of the upstream history:
-
-```sh
-cd ~/projects/my-pi-setup
-git fetch upstream
-git merge upstream/main
-npm install
-npm run format:check
-npm run check
-npm test
-```
-
-Resolve conflicts deliberately, especially in:
-
-- `package.json`
-- `extensions/ui-customization/index.ts`
-- setup documentation
-
-After validation, run `/reload` in Pi.
+Subagents and pull-request workflows can run commands or modify repositories with your user permissions. The workflow sandbox restricts orchestration code, but child agents can still modify the current project. Review changes before committing.
 
 ## Rollback
 
-Migration and apply backups are stored under:
+Apply backups are stored under:
 
 ```text
 ~/.pi/backups/
 ```
 
-To stop loading this checkout, remove its absolute path from the `packages` array in `~/.pi/agent/settings.json` and restart Pi.
-
-Do not delete the old top-level extension or skill copies until the local package has been loaded and verified successfully.
+To stop loading this checkout, remove its path from the `packages` array in `~/.pi/agent/settings.json`, then restart Pi.

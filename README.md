@@ -80,4 +80,4 @@ Live Claude Code and Codex subagent tests remain opt-in:
 npm run test:live
 ```
 
-See [SETUP.md](SETUP.md) for initial installation, migration, rollback, and upstream update instructions.
+See [SETUP.md](SETUP.md) for installation, configuration, and rollback instructions.

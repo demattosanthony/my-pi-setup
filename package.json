@@ -7,7 +7,7 @@
     "pi-package"
   ],
   "workspaces": [
-    "extensions/*"
+    "extensions/subagents"
   ],
   "pi": {
     "extensions": [
@@ -27,25 +27,29 @@
     ]
   },
   "dependencies": {
-    "@earendil-works/pi-ai": "^0.80.6",
-    "@earendil-works/pi-coding-agent": "^0.80.6",
-    "@earendil-works/pi-tui": "^0.80.6",
-    "acorn": "^8.17.0",
-    "ioredis": "^5.11.1",
-    "typebox": "^1.3.6"
+    "acorn": "^8.17.0"
   },
   "devDependencies": {
+    "@earendil-works/pi-ai": "^0.80.10",
+    "@earendil-works/pi-coding-agent": "^0.80.10",
+    "@earendil-works/pi-tui": "^0.80.10",
     "@types/node": "^26.1.1",
     "prettier": "^3.9.5",
+    "typebox": "^1.3.6",
     "typescript": "^7.0.2"
   },
   "type": "module",
   "scripts": {
     "apply": "node scripts/apply.mjs",
-    "check": "tsc --noEmit",
+    "check": "effect-tsgo patch && tsc --noEmit",
     "format": "prettier --write \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
     "format:check": "prettier --check \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
-    "test": "node --test --experimental-strip-types extensions/shared/*.test.ts extensions/workflows/*.test.ts && npm run test --workspaces --if-present",
-    "prepare": "effect-tsgo patch"
+    "test": "node --test --experimental-strip-types extensions/file-search/*.test.ts extensions/shared/*.test.ts extensions/workflows/*.test.ts && npm run test --workspaces --if-present"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
   }
 }

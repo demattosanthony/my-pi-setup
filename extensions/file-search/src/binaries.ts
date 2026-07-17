@@ -1,26 +1,18 @@
-/**
- * Startup resolution of the fd and rg executables.
- *
- * Resolution order (per tool, first usable wins):
- *   1. A normally installed system binary (`fd`/`fdfind`, `rg`) — used silently.
- *   2. An existing fallback in this repository's `bin/` directory — used silently.
- *   3. A fresh download of an official release into `bin/` — the only case that
- *      should surface a UI notification.
- *
- * The decision logic is an Effect over a small injectable environment
- * (`BinaryEnv`) so tests can drive it without touching the filesystem or the
- * network. `liveBinaryEnv` is the real implementation.
- */
-
-import { NodeHttpClient, NodeServices } from "@effect/platform-node";
 import { execFile } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  chmod,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { Crypto, Data, Effect, Encoding, FileSystem, Stream } from "effect";
-import { FetchHttpClient, HttpClient } from "effect/unstable/http";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const execFileAsync = promisify(execFile);
 
@@ -59,9 +51,7 @@ export type BinarySource = "system" | "bundled" | "installed";
 
 export interface ToolSpec {
   readonly tool: ToolName;
-  /** Commands probed on PATH, in order. Debian/Ubuntu install fd as `fdfind`. */
   readonly systemCommands: readonly string[];
-  /** Executable name used inside release archives and the repo bin directory. */
   readonly binaryName: string;
 }
 
@@ -78,7 +68,6 @@ export interface PlatformTarget {
 export interface ReleaseAsset {
   readonly url: string;
   readonly fileName: string;
-  /** Top-level directory inside the tarball. */
   readonly archiveDir: string;
   readonly binaryName: string;
   readonly version: string;
@@ -94,12 +83,10 @@ function targetTriple(target: PlatformTarget) {
         : undefined;
   if (!cpu) return undefined;
   if (target.os === "darwin") return `${cpu}-apple-darwin`;
-  // musl builds are statically linked, so they run on any Linux distribution.
   if (target.os === "linux") return `${cpu}-unknown-linux-musl`;
   return undefined;
 }
 
-/** Official GitHub release asset for a tool on a platform, if supported. */
 export function releaseAsset(
   tool: ToolName,
   target: PlatformTarget,
@@ -110,7 +97,6 @@ export function releaseAsset(
   if (tool === "fd") {
     const sha256 = FD_SHA256[triple];
     if (!sha256) return undefined;
-    // fd 10.4.2 dropped the Intel macOS archive, so retain 10.3.0 there.
     const version =
       triple === "x86_64-apple-darwin" ? FD_INTEL_DARWIN_VERSION : FD_VERSION;
     const archiveDir = `fd-v${version}-${triple}`;
@@ -143,277 +129,170 @@ export function currentTarget(): PlatformTarget {
   return { os: process.platform, arch: process.arch };
 }
 
-/** Repository root (`~/.pi/agent`) resolved from this module's location. */
 export function repositoryBinDir() {
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   return join(moduleDir, "..", "..", "..", "bin");
 }
 
-export class UnsupportedPlatformError extends Data.TaggedError(
-  "UnsupportedPlatformError",
-)<{
-  readonly message: string;
-}> {}
+export class UnsupportedPlatformError extends Error {
+  override name = "UnsupportedPlatformError";
+}
 
-export class InstallError extends Data.TaggedError("InstallError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export class InstallError extends Error {
+  override name = "InstallError";
+}
 
 export interface BinaryEnv {
-  /** True when the executable runs and supports the flags this tool requires. */
-  readonly probe: (command: string, tool: ToolName) => Effect.Effect<boolean>;
-  /** Download and place a release binary at the destination path. */
-  readonly install: (
-    asset: ReleaseAsset,
-    destination: string,
-  ) => Effect.Effect<void, InstallError>;
+  readonly probe: (command: string, tool: ToolName) => Promise<boolean>;
+  readonly install: (asset: ReleaseAsset, destination: string) => Promise<void>;
 }
 
 export interface ResolvedBinary {
   readonly tool: ToolName;
-  /** Command or absolute path passed to pi.exec. */
   readonly command: string;
   readonly source: BinarySource;
   readonly version?: string;
 }
 
-/** Resolve one tool: system binary, existing bin fallback, or fresh install. */
-export function resolveBinary(
+export async function resolveBinary(
   spec: ToolSpec,
   binDir: string,
   target: PlatformTarget,
   env: BinaryEnv,
-): Effect.Effect<ResolvedBinary, UnsupportedPlatformError | InstallError> {
-  return Effect.gen(function* () {
-    for (const command of spec.systemCommands) {
-      if (yield* env.probe(command, spec.tool)) {
-        return { tool: spec.tool, command, source: "system" as const };
-      }
+): Promise<ResolvedBinary> {
+  for (const command of spec.systemCommands) {
+    if (await env.probe(command, spec.tool)) {
+      return { tool: spec.tool, command, source: "system" };
     }
+  }
 
-    const bundled = join(binDir, spec.binaryName);
-    if (yield* env.probe(bundled, spec.tool)) {
-      return { tool: spec.tool, command: bundled, source: "bundled" as const };
-    }
+  const bundled = join(binDir, spec.binaryName);
+  if (await env.probe(bundled, spec.tool)) {
+    return { tool: spec.tool, command: bundled, source: "bundled" };
+  }
 
-    const asset = releaseAsset(spec.tool, target);
-    if (!asset) {
-      return yield* new UnsupportedPlatformError({
-        message: `No ${spec.tool} binary is available for ${target.os}/${target.arch}. Install ${spec.tool} manually and restart pi.`,
-      });
-    }
+  const asset = releaseAsset(spec.tool, target);
+  if (!asset) {
+    throw new UnsupportedPlatformError(
+      `No ${spec.tool} binary is available for ${target.os}/${target.arch}. Install ${spec.tool} manually and restart pi.`,
+    );
+  }
 
-    yield* env.install(asset, bundled);
+  await env.install(asset, bundled);
+  if (!(await env.probe(bundled, spec.tool))) {
+    throw new InstallError(
+      `${spec.tool} ${asset.version} was installed to ${bundled} but failed to run.`,
+    );
+  }
 
-    if (!(yield* env.probe(bundled, spec.tool))) {
-      return yield* new InstallError({
-        message: `${spec.tool} ${asset.version} was installed to ${bundled} but failed to run.`,
-      });
-    }
-
-    return {
-      tool: spec.tool,
-      command: bundled,
-      source: "installed" as const,
-      version: asset.version,
-    };
-  });
+  return {
+    tool: spec.tool,
+    command: bundled,
+    source: "installed",
+    version: asset.version,
+  };
 }
 
-function errorMessage(error: unknown) {
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** Read a response incrementally while enforcing the startup memory bound. */
-export function readBoundedResponse<E, R>(
-  response: {
-    readonly headers: Readonly<Record<string, string | undefined>>;
-    readonly stream: Stream.Stream<Uint8Array, E, R>;
-  },
+export async function readBoundedResponse(
+  response: Response,
   maxBytes = MAX_ARCHIVE_BYTES,
 ) {
-  return Effect.gen(function* () {
-    const declaredLength = Number(response.headers["content-length"]);
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-      return yield* Effect.fail(
-        new Error(`download exceeds the ${maxBytes}-byte size limit`),
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new Error(`download exceeds the ${maxBytes}-byte size limit`);
+  }
+  if (!response.body) return Buffer.alloc(0);
+
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  for await (const chunk of response.body) {
+    totalBytes += chunk.byteLength;
+    if (totalBytes > maxBytes) {
+      throw new Error(`download exceeds the ${maxBytes}-byte size limit`);
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks, totalBytes);
+}
+
+async function downloadAsset(initialUrl: URL) {
+  let url = initialUrl;
+  const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
+
+  for (let redirects = 0; redirects <= MAX_DOWNLOAD_REDIRECTS; redirects++) {
+    if (url.protocol !== "https:") {
+      throw new Error(`refusing non-HTTPS download URL: ${url.href}`);
+    }
+
+    const response = await fetch(url, { redirect: "manual", signal });
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get("location");
+      if (!location)
+        throw new Error(`redirect from ${url.href} had no location`);
+      if (redirects === MAX_DOWNLOAD_REDIRECTS) {
+        throw new Error(
+          `download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirects`,
+        );
+      }
+      url = new URL(location, url);
+      continue;
+    }
+    if (!response.ok) {
+      throw new Error(`download failed with HTTP ${response.status}`);
+    }
+    return readBoundedResponse(response);
+  }
+
+  throw new Error("download redirect handling failed");
+}
+
+async function installAsset(asset: ReleaseAsset, destination: string) {
+  if (!URL.canParse(asset.url))
+    throw new InstallError(`Invalid URL: ${asset.url}`);
+
+  const workDir = await mkdtemp(join(tmpdir(), "pi-file-search-"));
+  const stagedDestination = `${destination}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    const bytes = await downloadAsset(new URL(asset.url));
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    if (digest !== asset.sha256) {
+      throw new Error(
+        `SHA-256 mismatch for ${asset.fileName}: expected ${asset.sha256}, received ${digest}`,
       );
     }
 
-    const result = yield* Stream.runFoldEffect(
-      response.stream,
-      () => ({ chunks: [] as Uint8Array[], totalBytes: 0 }),
-      (accumulator, chunk) => {
-        const totalBytes = accumulator.totalBytes + chunk.byteLength;
-        if (totalBytes > maxBytes) {
-          return Effect.fail(
-            new Error(`download exceeds the ${maxBytes}-byte size limit`),
-          );
-        }
-        return Effect.sync(() => {
-          accumulator.chunks.push(chunk);
-          accumulator.totalBytes = totalBytes;
-          return accumulator;
-        });
-      },
-    );
-
-    return Buffer.concat(result.chunks, result.totalBytes);
-  });
-}
-
-function downloadAsset(client: HttpClient.HttpClient, initialUrl: URL) {
-  const scopedClient = client.pipe(HttpClient.withScope);
-
-  return Effect.gen(function* () {
-    let url = initialUrl;
-
-    for (let redirects = 0; redirects <= MAX_DOWNLOAD_REDIRECTS; redirects++) {
-      if (url.protocol !== "https:") {
-        return yield* Effect.fail(
-          new Error(`refusing non-HTTPS download URL: ${url.href}`),
-        );
-      }
-
-      const result = yield* Effect.scoped(
-        Effect.gen(function* () {
-          const response = yield* scopedClient.get(url);
-          if ([301, 302, 303, 307, 308].includes(response.status)) {
-            const location = response.headers.location;
-            if (!location) {
-              return yield* Effect.fail(
-                new Error(`redirect from ${url.href} had no location header`),
-              );
-            }
-            if (redirects === MAX_DOWNLOAD_REDIRECTS) {
-              return yield* Effect.fail(
-                new Error(
-                  `download exceeded ${MAX_DOWNLOAD_REDIRECTS} redirects`,
-                ),
-              );
-            }
-            if (!URL.canParse(location, url)) {
-              return yield* Effect.fail(
-                new Error(
-                  `download returned an invalid redirect URL: ${location}`,
-                ),
-              );
-            }
-            return { _tag: "Redirect" as const, url: new URL(location, url) };
-          }
-
-          if (response.status < 200 || response.status >= 300) {
-            return yield* Effect.fail(
-              new Error(`download failed with HTTP ${response.status}`),
-            );
-          }
-          return {
-            _tag: "Complete" as const,
-            bytes: yield* readBoundedResponse(response),
-          };
-        }),
-      );
-
-      if (result._tag === "Complete") return result.bytes;
-      url = result.url;
-    }
-
-    return yield* Effect.fail(new Error("download redirect handling failed"));
-  });
-}
-
-/** Real environment: probes via `--version`, installs via HTTPS + tar. */
-export const liveBinaryEnv: BinaryEnv = {
-  probe: (command, tool) =>
-    Effect.promise(async () => {
-      try {
-        const args =
-          tool === "fd" ? ["--max-results", "1", "--", ""] : ["--version"];
-        await execFileAsync(command, args, {
-          cwd: tmpdir(),
-          timeout: 5_000,
-        });
-        return true;
-      } catch {
-        return false;
-      }
-    }),
-
-  install: (asset, destination) => {
-    const install = Effect.gen(function* () {
-      if (!URL.canParse(asset.url)) {
-        return yield* Effect.fail(
-          new Error(`invalid download URL: ${asset.url}`),
-        );
-      }
-
-      const url = new URL(asset.url);
-      const client = yield* HttpClient.HttpClient;
-      const fs = yield* FileSystem.FileSystem;
-      const crypto = yield* Crypto.Crypto;
-      const bytes = yield* downloadAsset(client, url).pipe(
-        Effect.timeout(DOWNLOAD_TIMEOUT_MS),
-      );
-
-      const digestBytes = yield* crypto.digest("SHA-256", bytes);
-      const digest = Encoding.encodeHex(digestBytes);
-      if (digest !== asset.sha256) {
-        return yield* Effect.fail(
-          new Error(
-            `SHA-256 mismatch for ${asset.fileName}: expected ${asset.sha256}, received ${digest}`,
-          ),
-        );
-      }
-
-      const workDir = yield* fs.makeTempDirectoryScoped({
-        prefix: "pi-file-search-",
-      });
-      const archivePath = join(workDir, asset.fileName);
-      yield* fs.writeFile(archivePath, bytes);
-
-      const tarExitCode = yield* Effect.scoped(
-        Effect.gen(function* () {
-          const tar = yield* ChildProcess.make(
-            "tar",
-            ["-xzf", archivePath, "-C", workDir],
-            { stdin: "ignore", stdout: "ignore", stderr: "ignore" },
-          );
-          return yield* tar.exitCode;
-        }),
-      ).pipe(Effect.timeout(60_000));
-      if (tarExitCode !== ChildProcessSpawner.ExitCode(0)) {
-        return yield* Effect.fail(
-          new Error(`tar failed with exit code ${tarExitCode}`),
-        );
-      }
-
-      const extracted = join(workDir, asset.archiveDir, asset.binaryName);
-      yield* fs.makeDirectory(dirname(destination), { recursive: true });
-      const uuid = yield* crypto.randomUUIDv4;
-      const stagedDestination = `${destination}.${process.pid}.${uuid}.tmp`;
-      yield* Effect.addFinalizer(() =>
-        fs.remove(stagedDestination, { force: true }).pipe(Effect.orDie),
-      );
-      yield* fs.copyFile(extracted, stagedDestination);
-      yield* fs.chmod(stagedDestination, 0o755);
-      yield* fs.rename(stagedDestination, destination);
+    const archivePath = join(workDir, asset.fileName);
+    await writeFile(archivePath, bytes);
+    await execFileAsync("tar", ["-xzf", archivePath, "-C", workDir], {
+      timeout: 60_000,
     });
 
-    return install.pipe(
-      Effect.scoped,
-      Effect.provide(NodeServices.layer),
-      Effect.provide(NodeHttpClient.layerFetch),
-      Effect.provideService(FetchHttpClient.RequestInit, {
-        redirect: "manual",
-      }),
-      Effect.mapError(
-        (cause) =>
-          new InstallError({
-            message: `Failed to install ${asset.binaryName} ${asset.version} from ${asset.url}: ${errorMessage(cause)}`,
-            cause,
-          }),
-      ),
+    const extracted = join(workDir, asset.archiveDir, asset.binaryName);
+    await mkdir(dirname(destination), { recursive: true });
+    await copyFile(extracted, stagedDestination);
+    await chmod(stagedDestination, 0o755);
+    await rename(stagedDestination, destination);
+  } catch (error) {
+    throw new InstallError(
+      `Failed to install ${asset.binaryName} ${asset.version} from ${asset.url}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
     );
+  } finally {
+    await rm(stagedDestination, { force: true });
+    await rm(workDir, { recursive: true, force: true });
+  }
+}
+
+export const liveBinaryEnv: BinaryEnv = {
+  async probe(command, tool) {
+    try {
+      const args =
+        tool === "fd" ? ["--max-results", "1", "--", ""] : ["--version"];
+      await execFileAsync(command, args, { cwd: tmpdir(), timeout: 5_000 });
+      return true;
+    } catch {
+      return false;
+    }
   },
+  install: installAsset,
 };

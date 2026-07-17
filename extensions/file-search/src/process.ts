@@ -1,11 +1,15 @@
+import { spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
-import { Effect, FileSystem, Stream } from "effect";
-import { ChildProcess } from "effect/unstable/process";
 import type { CapturedOutput } from "./output.ts";
 
 const STDERR_MAX_BYTES = 64 * 1024;
@@ -67,80 +71,73 @@ function finishStdout(state: PreviewState, fullOutputPath: string) {
   } satisfies CapturedOutput;
 }
 
-function collectStderr<E, R>(stream: Stream.Stream<Uint8Array, E, R>) {
-  return Stream.runFold(
-    stream,
-    () => Buffer.alloc(0),
-    (captured, chunk) => {
-      if (captured.byteLength >= STDERR_MAX_BYTES) return captured;
-      const remaining = STDERR_MAX_BYTES - captured.byteLength;
-      return Buffer.concat([captured, chunk.subarray(0, remaining)]);
-    },
-  ).pipe(Effect.map((bytes) => bytes.toString("utf8")));
+async function collectStderr(stream: NodeJS.ReadableStream) {
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  for await (const value of stream) {
+    if (totalBytes >= STDERR_MAX_BYTES) continue;
+    const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+    const kept = chunk.subarray(0, STDERR_MAX_BYTES - totalBytes);
+    chunks.push(kept);
+    totalBytes += kept.byteLength;
+  }
+  return Buffer.concat(chunks, totalBytes).toString("utf8");
 }
 
-export function executeSearchProcess(options: {
+function waitForExit(child: ReturnType<typeof spawn>) {
+  return new Promise<number>((resolve, reject) => {
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      if (code !== null) resolve(code);
+      else
+        reject(
+          new Error(`search process exited via ${signal ?? "unknown signal"}`),
+        );
+    });
+  });
+}
+
+export async function executeSearchProcess(options: {
   readonly command: string;
   readonly args: readonly string[];
   readonly cwd: string;
   readonly tempPrefix: string;
+  readonly signal?: AbortSignal;
 }) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const directory = yield* fs.makeTempDirectory({
-      prefix: options.tempPrefix,
+  const directory = await mkdtemp(join(tmpdir(), options.tempPrefix));
+  const fullOutputPath = join(directory, "output.txt");
+  let retainDirectory = false;
+
+  try {
+    const preview = makePreviewState();
+    const child = spawn(options.command, options.args, {
+      cwd: options.cwd,
+      signal: options.signal,
+      stdio: ["ignore", "pipe", "pipe"],
     });
-    const fullOutputPath = join(directory, "output.txt");
-    let retainDirectory = false;
+    const observer = new Transform({
+      transform(chunk: Buffer, _encoding, callback) {
+        observeStdout(preview, chunk);
+        callback(null, chunk);
+      },
+    });
 
-    return yield* Effect.gen(function* () {
-      const preview = makePreviewState();
-      const process = yield* ChildProcess.make(options.command, options.args, {
-        cwd: options.cwd,
-        stdin: "ignore",
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-
-      const result = yield* Effect.all(
-        {
-          exitCode: process.exitCode,
-          stdout: process.stdout.pipe(
-            Stream.tap((chunk) =>
-              Effect.sync(() => observeStdout(preview, chunk)),
-            ),
-            Stream.run(fs.sink(fullOutputPath)),
-          ),
-          stderr: collectStderr(process.stderr),
-        },
-        { concurrency: "unbounded" },
-      );
-      const output = finishStdout(preview, fullOutputPath);
-      retainDirectory = output.truncated;
-      return {
-        code: Number(result.exitCode),
-        stderr: result.stderr,
-        output,
-      };
-    }).pipe(
-      Effect.ensuring(
-        Effect.suspend(() =>
-          retainDirectory
-            ? Effect.void
-            : fs
-                .remove(directory, { recursive: true, force: true })
-                .pipe(Effect.orDie),
-        ),
-      ),
-    );
-  }).pipe(Effect.scoped);
+    const [code, , stderr] = await Promise.all([
+      waitForExit(child),
+      pipeline(child.stdout, observer, createWriteStream(fullOutputPath)),
+      collectStderr(child.stderr),
+    ]);
+    const output = finishStdout(preview, fullOutputPath);
+    retainDirectory = output.truncated;
+    return { code, stderr, output };
+  } finally {
+    if (!retainDirectory) {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
 }
 
-export function discardCapturedOutput(output: CapturedOutput) {
-  if (!output.fullOutputPath) return Effect.void;
-  const directory = dirname(output.fullOutputPath);
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs.remove(directory, { recursive: true, force: true });
-  });
+export async function discardCapturedOutput(output: CapturedOutput) {
+  if (!output.fullOutputPath) return;
+  await rm(dirname(output.fullOutputPath), { recursive: true, force: true });
 }

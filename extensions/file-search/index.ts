@@ -1,24 +1,11 @@
-/**
- * file-search — first-class `fd` and `rg` tools for pi.
- *
- * On session start the extension resolves a usable binary for each tool:
- * a normally installed system binary is preferred (silently), then an
- * existing fallback in this repo's `bin/` directory (silently), and only
- * when neither exists is an official release downloaded into `bin/` — the
- * single case that shows a UI notification. Tools await that initialization
- * before executing, and report a clear error if it failed.
- */
-
-import { NodeServices } from "@effect/platform-node";
+import { StringEnum } from "@earendil-works/pi-ai";
 import type {
   AgentToolResult,
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { Cause, Data, Effect, Exit } from "effect";
 import { Type } from "typebox";
-import { StringEnum } from "@earendil-works/pi-ai";
 import {
   buildFdArgs,
   buildRgArgs,
@@ -57,16 +44,11 @@ export function makeBinaryInitializers(
   env: BinaryEnv,
 ) {
   return {
-    fd: Effect.runSync(
-      Effect.cached(resolveBinary(TOOL_SPECS.fd, binDir, target, env)),
-    ),
-    rg: Effect.runSync(
-      Effect.cached(resolveBinary(TOOL_SPECS.rg, binDir, target, env)),
-    ),
+    fd: resolveBinary(TOOL_SPECS.fd, binDir, target, env),
+    rg: resolveBinary(TOOL_SPECS.rg, binDir, target, env),
   };
 }
 
-/** Human-readable install notice, shown only for fresh downloads. */
 export function installNotifications(binaries: readonly ResolvedBinary[]) {
   return binaries
     .filter((binary) => binary.source === "installed")
@@ -76,10 +58,6 @@ export function installNotifications(binaries: readonly ResolvedBinary[]) {
         ` to ${repositoryBinDir()}`,
     );
 }
-
-class SearchError extends Data.TaggedError("SearchError")<{
-  readonly message: string;
-}> {}
 
 interface SearchOutcome {
   readonly output: CapturedOutput;
@@ -103,108 +81,87 @@ export interface RgToolDetails {
 
 const EXEC_TIMEOUT_MS = 60_000;
 
-function causeMessage<E>(cause: Cause.Cause<E>) {
-  const [first] = Cause.prettyErrors(cause);
-  return first?.message ?? Cause.pretty(cause);
-}
-
-function unwrapToolExit<A, E>(exit: Exit.Exit<A, E>, tool: "fd" | "rg") {
-  if (Exit.isSuccess(exit)) return exit.value;
-  if (Cause.hasInterruptsOnly(exit.cause)) {
-    throw new Error(`${tool} search was cancelled.`);
-  }
-  throw new Error(causeMessage(exit.cause));
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export default function fileSearchTools(pi: ExtensionAPI) {
   let notified = false;
-
-  const binDir = repositoryBinDir();
-  const target = currentTarget();
-  const initializers = makeBinaryInitializers(binDir, target, liveBinaryEnv);
+  const initializers = makeBinaryInitializers(
+    repositoryBinDir(),
+    currentTarget(),
+    liveBinaryEnv,
+  );
 
   pi.on("session_start", async (_event, ctx) => {
-    const exit = await Effect.runPromiseExit(
-      Effect.gen(function* () {
-        const initialized = yield* Effect.all(
-          {
-            fd: Effect.exit(initializers.fd),
-            rg: Effect.exit(initializers.rg),
-          },
-          { concurrency: "unbounded" },
-        );
-        if (!ctx.hasUI || notified) return;
+    const initialized = await Promise.allSettled([
+      initializers.fd,
+      initializers.rg,
+    ]);
+    if (!ctx.hasUI || notified) return;
 
-        notified = true;
-        for (const tool of ["fd", "rg"] as const) {
-          const toolExit = initialized[tool];
-          if (Exit.isSuccess(toolExit)) {
-            for (const message of installNotifications([toolExit.value])) {
-              ctx.ui.notify(message, "info");
-            }
-          } else {
-            ctx.ui.notify(
-              `file-search ${tool} setup failed: ${causeMessage(toolExit.cause)}`,
-              "error",
-            );
-          }
+    notified = true;
+    for (const [index, tool] of (["fd", "rg"] as const).entries()) {
+      const result = initialized[index]!;
+      if (result.status === "fulfilled") {
+        for (const message of installNotifications([result.value])) {
+          ctx.ui.notify(message, "info");
         }
-      }),
-    );
-
-    if (Exit.isFailure(exit) && ctx.hasUI && !notified) {
-      notified = true;
-      ctx.ui.notify(
-        `file-search setup failed: ${causeMessage(exit.cause)}`,
-        "error",
-      );
+      } else {
+        ctx.ui.notify(
+          `file-search ${tool} setup failed: ${errorMessage(result.reason)}`,
+          "error",
+        );
+      }
     }
   });
 
-  /** Await init, stream the binary output to disk, and classify its exit. */
-  function runSearch(tool: "fd" | "rg", args: string[], ctx: ExtensionContext) {
-    return Effect.gen(function* () {
-      const binary = yield* initializers[tool];
-      const result = yield* executeSearchProcess({
+  async function runSearch(
+    tool: "fd" | "rg",
+    args: string[],
+    ctx: ExtensionContext,
+    signal: AbortSignal | undefined,
+  ): Promise<SearchOutcome> {
+    const binary = await initializers[tool];
+    const timeoutSignal = AbortSignal.timeout(EXEC_TIMEOUT_MS);
+    const executionSignal = signal
+      ? AbortSignal.any([signal, timeoutSignal])
+      : timeoutSignal;
+
+    let result: Awaited<ReturnType<typeof executeSearchProcess>>;
+    try {
+      result = await executeSearchProcess({
         command: binary.command,
         args,
         cwd: ctx.cwd,
         tempPrefix: `pi-${tool}-`,
+        signal: executionSignal,
       });
+    } catch (error) {
+      if (signal?.aborted) throw new Error(`${tool} search was cancelled.`);
+      if (timeoutSignal.aborted) throw new Error(`${tool} timed out.`);
+      throw new Error(`${tool} failed: ${errorMessage(error)}`, {
+        cause: error,
+      });
+    }
 
-      // ripgrep exits 1 for "no matches"; fd exits 0 even with no results.
-      if (tool === "rg" && result.code === 1 && result.output.lineCount === 0) {
-        return {
-          output: result.output,
-          noMatches: true,
-          binarySource: binary.source,
-        } satisfies SearchOutcome;
-      }
-      if (result.code !== 0) {
-        yield* discardCapturedOutput(result.output);
-        const detail = result.stderr.trim() || `exit code ${result.code}`;
-        return yield* new SearchError({ message: `${tool} failed: ${detail}` });
-      }
+    if (tool === "rg" && result.code === 1 && result.output.lineCount === 0) {
       return {
         output: result.output,
-        noMatches: result.output.lineCount === 0,
+        noMatches: true,
         binarySource: binary.source,
-      } satisfies SearchOutcome;
-    }).pipe(
-      Effect.timeout(EXEC_TIMEOUT_MS),
-      Effect.mapError((error) => {
-        if (error instanceof SearchError) return error;
-        return new SearchError({
-          message:
-            error._tag === "TimeoutError"
-              ? `${tool} timed out.`
-              : error instanceof Error
-                ? error.message
-                : String(error),
-        });
-      }),
-      Effect.provide(NodeServices.layer),
-    );
+      };
+    }
+    if (result.code !== 0) {
+      await discardCapturedOutput(result.output);
+      const detail = result.stderr.trim() || `exit code ${result.code}`;
+      throw new Error(`${tool} failed: ${detail}`);
+    }
+    return {
+      output: result.output,
+      noMatches: result.output.lineCount === 0,
+      binarySource: binary.source,
+    };
   }
 
   pi.registerTool<ReturnType<typeof fdParameters>, FdToolDetails>({
@@ -216,34 +173,28 @@ export default function fileSearchTools(pi: ExtensionAPI) {
     parameters: fdParameters(),
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const exit = await Effect.runPromiseExit(
-        Effect.gen(function* () {
-          const outcome = yield* runSearch("fd", buildFdArgs(params), ctx);
-          if (outcome.noMatches) {
-            return {
-              content: [{ type: "text", text: "No files found" }],
-              details: {
-                binarySource: outcome.binarySource,
-                matchCount: 0,
-                truncated: false,
-              },
-            } satisfies AgentToolResult<FdToolDetails>;
-          }
+      const outcome = await runSearch("fd", buildFdArgs(params), ctx, signal);
+      if (outcome.noMatches) {
+        return {
+          content: [{ type: "text", text: "No files found" }],
+          details: {
+            binarySource: outcome.binarySource,
+            matchCount: 0,
+            truncated: false,
+          },
+        } satisfies AgentToolResult<FdToolDetails>;
+      }
 
-          const formatted = formatCapturedOutput(outcome.output);
-          return {
-            content: [{ type: "text", text: formatted.text }],
-            details: {
-              binarySource: outcome.binarySource,
-              matchCount: formatted.lineCount,
-              truncated: formatted.truncated,
-              fullOutputPath: formatted.fullOutputPath,
-            },
-          } satisfies AgentToolResult<FdToolDetails>;
-        }),
-        signal ? { signal } : undefined,
-      );
-      return unwrapToolExit(exit, "fd");
+      const formatted = formatCapturedOutput(outcome.output);
+      return {
+        content: [{ type: "text", text: formatted.text }],
+        details: {
+          binarySource: outcome.binarySource,
+          matchCount: formatted.lineCount,
+          truncated: formatted.truncated,
+          fullOutputPath: formatted.fullOutputPath,
+        },
+      } satisfies AgentToolResult<FdToolDetails>;
     },
 
     renderCall(args, theme) {
@@ -257,7 +208,7 @@ export default function fileSearchTools(pi: ExtensionAPI) {
         args.hidden && "hidden",
         args.max_depth !== undefined && `depth≤${args.max_depth}`,
       ].filter((flag): flag is string => typeof flag === "string");
-      if (flags.length > 0) text += " " + theme.fg("dim", flags.join(" "));
+      if (flags.length > 0) text += ` ${theme.fg("dim", flags.join(" "))}`;
       return new Text(text, 0, 0);
     },
 
@@ -287,34 +238,28 @@ export default function fileSearchTools(pi: ExtensionAPI) {
     parameters: rgParameters(),
 
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-      const exit = await Effect.runPromiseExit(
-        Effect.gen(function* () {
-          const outcome = yield* runSearch("rg", buildRgArgs(params), ctx);
-          if (outcome.noMatches) {
-            return {
-              content: [{ type: "text", text: "No matches found" }],
-              details: {
-                binarySource: outcome.binarySource,
-                outputLines: 0,
-                truncated: false,
-              },
-            } satisfies AgentToolResult<RgToolDetails>;
-          }
+      const outcome = await runSearch("rg", buildRgArgs(params), ctx, signal);
+      if (outcome.noMatches) {
+        return {
+          content: [{ type: "text", text: "No matches found" }],
+          details: {
+            binarySource: outcome.binarySource,
+            outputLines: 0,
+            truncated: false,
+          },
+        } satisfies AgentToolResult<RgToolDetails>;
+      }
 
-          const formatted = formatCapturedOutput(outcome.output);
-          return {
-            content: [{ type: "text", text: formatted.text }],
-            details: {
-              binarySource: outcome.binarySource,
-              outputLines: formatted.lineCount,
-              truncated: formatted.truncated,
-              fullOutputPath: formatted.fullOutputPath,
-            },
-          } satisfies AgentToolResult<RgToolDetails>;
-        }),
-        signal ? { signal } : undefined,
-      );
-      return unwrapToolExit(exit, "rg");
+      const formatted = formatCapturedOutput(outcome.output);
+      return {
+        content: [{ type: "text", text: formatted.text }],
+        details: {
+          binarySource: outcome.binarySource,
+          outputLines: formatted.lineCount,
+          truncated: formatted.truncated,
+          fullOutputPath: formatted.fullOutputPath,
+        },
+      } satisfies AgentToolResult<RgToolDetails>;
     },
 
     renderCall(args, theme) {
@@ -328,7 +273,7 @@ export default function fileSearchTools(pi: ExtensionAPI) {
         args.hidden && "hidden",
         args.context !== undefined && `ctx=${args.context}`,
       ].filter((flag): flag is string => typeof flag === "string");
-      if (flags.length > 0) text += " " + theme.fg("dim", flags.join(" "));
+      if (flags.length > 0) text += ` ${theme.fg("dim", flags.join(" "))}`;
       return new Text(text, 0, 0);
     },
 

@@ -17,7 +17,7 @@
 ## Install
 
 ```bash
-npm install effect@beta @effect/platform-node@beta
+bun add effect@beta @effect/platform-node@beta
 ```
 
 Big structural facts:

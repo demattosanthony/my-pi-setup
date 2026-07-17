@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "bun:test";
 import { createDeferredResultDelivery } from "../../extensions/subagents/src/result-delivery.ts";
 
 test("a result consumed by a later wait is not delivered", () => {

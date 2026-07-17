@@ -2,14 +2,14 @@
 
 ## Install
 
-Prerequisites: Pi, Node.js, npm, and Git. Claude Code and Codex are optional if you want those subagent backends.
+Prerequisites: Pi, Bun 1.3.14 or newer, Node.js, and Git. Node remains required for the permission-restricted workflow sandbox. Claude Code and Codex are optional subagent backends.
 
 ```sh
 mkdir -p ~/projects
 git clone https://github.com/demattosanthony/my-pi-setup.git ~/projects/my-pi-setup
 cd ~/projects/my-pi-setup
-npm ci
-npm run apply
+bun install --frozen-lockfile
+bun run apply
 ```
 
 Start Pi, use `/login` to authenticate providers, then run `/reload`. Credentials and runtime state are not stored in this repository.
@@ -21,13 +21,13 @@ Pi loads this checkout directly as a local package. There is no build or copy st
 Preview changes:
 
 ```sh
-npm run apply -- --dry-run
+bun run apply --dry-run
 ```
 
 Apply changes:
 
 ```sh
-npm run apply
+bun run apply
 ```
 
 The apply script:
@@ -51,12 +51,12 @@ edit -> validate -> /reload
 Validate changes with:
 
 ```sh
-npm run format:check
-npm run check
-npm test
+bun run format:check
+bun run check
+bun test
 ```
 
-Run `npm ci` after pulling dependency changes. Restart Pi after dependency or startup-setting changes.
+Run `bun install --frozen-lockfile` after pulling dependency changes. Restart Pi after dependency or startup-setting changes.
 
 ## Safety
 

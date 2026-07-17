@@ -2,6 +2,7 @@
   "name": "anthony-pi-setup",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "bun@1.3.14",
   "description": "Anthony DeMattos' version-controlled Pi setup",
   "keywords": [
     "pi-package"
@@ -33,6 +34,7 @@
     "@earendil-works/pi-ai": "^0.80.10",
     "@earendil-works/pi-coding-agent": "^0.80.10",
     "@earendil-works/pi-tui": "^0.80.10",
+    "@types/bun": "^1.3.14",
     "@types/node": "^26.1.1",
     "prettier": "^3.9.5",
     "typebox": "^1.3.6",
@@ -40,13 +42,12 @@
   },
   "type": "module",
   "scripts": {
-    "apply": "node scripts/apply.mjs",
+    "apply": "bun scripts/apply.mjs",
     "check": "effect-tsgo patch && tsc --noEmit",
     "format": "prettier --write \"extensions/**/*.{ts,cjs}\" \"tests/**/*.ts\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"themes/**/*.json\" \"*.json\"",
     "format:check": "prettier --check \"extensions/**/*.{ts,cjs}\" \"tests/**/*.ts\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"themes/**/*.json\" \"*.json\"",
-    "test": "node scripts/test.mjs",
-    "test:live": "node scripts/test.mjs --live",
-    "test:list": "node scripts/test.mjs --list"
+    "test": "bun test",
+    "test:live": "bun test ./tests/subagents/claude.live.ts ./tests/subagents/codex.live.ts"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

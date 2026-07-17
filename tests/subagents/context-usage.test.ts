@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "bun:test";
 import { contextOccupancyTokens } from "../../extensions/subagents/src/backends/claude.ts";
 import { parseThreadTokenUsage } from "../../extensions/subagents/src/backends/codex.ts";
 

@@ -81,11 +81,6 @@ function sanitizeAgentOptions(value: unknown): SandboxAgentOptions {
  * are aborted only when the workflow is cancelled or the sandbox is cleaned up.
  */
 export function runWorkflowSandbox(options: RunWorkflowSandboxOptions) {
-  if (!process.allowedNodeEnvironmentFlags.has("--permission")) {
-    return Promise.reject(
-      new Error("This Node runtime cannot enforce workflow child permissions"),
-    );
-  }
   if (byteLength(options.source) > MAX_SOURCE_BYTES) {
     return Promise.reject(
       new Error(`Workflow script exceeds the ${MAX_SOURCE_BYTES} byte limit`),
@@ -104,8 +99,15 @@ export function runWorkflowSandbox(options: RunWorkflowSandboxOptions) {
     const workerPath = fileURLToPath(
       new URL("./sandbox-child.cjs", import.meta.url),
     );
+    // Bun orchestrates this repository, but the sandbox intentionally remains a
+    // Node child because Node's permission model enforces its security boundary.
+    const sandboxRuntime = process.allowedNodeEnvironmentFlags.has(
+      "--permission",
+    )
+      ? process.execPath
+      : "node";
     const child = spawn(
-      process.execPath,
+      sandboxRuntime,
       [
         "--permission",
         `--allow-fs-read=${path.dirname(workerPath)}`,

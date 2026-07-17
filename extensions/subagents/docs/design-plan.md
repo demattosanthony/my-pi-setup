@@ -471,7 +471,7 @@ views are exercised end to end:
 ```
 /Users/davis/.pi/agent/extensions/subagents/
 ├── package.json               # name, "effect": "^4.0.0-beta.x"; pi extension entry via pi.extensions
-├── package-lock.json / node_modules/   (after npm install)
+├── bun.lock / node_modules/            (after bun install)
 ├── docs/
 │   └── design-plan.md         # this document
 ├── index.ts                   # extension factory: runtime lifecycle, 5 tools, /subagents
@@ -502,15 +502,15 @@ views are exercised end to end:
 Tests live separately under `tests/subagents/`, including `result-delivery.test.ts`.
 
 Notes:
-- `package.json` is needed because `effect` is an npm dependency (extension-with-deps
-  style from the extension docs). Everything else avoids new dependencies.
+- `package.json` declares the extension's Effect dependency. Everything else avoids new
+  dependencies.
 - v1's `child-session.ts` trust/tool-policy helpers are **not** copied in v1 of v2 (the
   stubs don't need them); the real pi backend will bring the needed subset into
   `backends/pi.ts` when implemented. The `resolveStandaloneChildProjectTrust` logic *is*
   still referenced by the design (SpawnTask.parentContext.projectTrusted) so the tool
   layer computes trust the same way v1 does.
-- Repository scripts run tests from the root `tests/` tree; provider-usage tests use
-  the `*.live.test.ts` suffix and remain opt-in.
+- Bun discovers routine tests from the root `tests/` tree; provider-usage tests use
+  the `*.live.ts` suffix and remain opt-in.
 
 ---
 

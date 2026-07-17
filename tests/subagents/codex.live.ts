@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "bun:test";
 import { Effect } from "effect";
 import { codexBackend } from "../../extensions/subagents/src/backends/codex.ts";
 import type {
@@ -43,15 +43,11 @@ async function codexAvailable() {
   return Effect.runPromise(codexBackend.available);
 }
 
-test(
-  "Codex backend completes a live manager run",
-  { timeout: 75_000 },
-  async (t) => {
-    if (!(await codexAvailable())) {
-      t.skip("codex executable is unavailable");
-      return;
-    }
+const liveTest = (await codexAvailable()) ? test : test.skip;
 
+liveTest(
+  "Codex backend completes a live manager run",
+  async () => {
     const runtime = createSubagentRuntime();
     try {
       const manager = await runtime.runPromise(SubagentManager);
@@ -71,17 +67,12 @@ test(
       await runtime.dispose();
     }
   },
+  { timeout: 75_000 },
 );
 
-test(
+liveTest(
   "Codex backend interrupt settles a live manager run",
-  { timeout: 30_000 },
-  async (t) => {
-    if (!(await codexAvailable())) {
-      t.skip("codex executable is unavailable");
-      return;
-    }
-
+  async () => {
     const runtime = createSubagentRuntime();
     try {
       const manager = await runtime.runPromise(SubagentManager);
@@ -105,4 +96,5 @@ test(
       await runtime.dispose();
     }
   },
+  { timeout: 30_000 },
 );

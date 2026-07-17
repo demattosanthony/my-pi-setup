@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import test from "node:test";
+import { test } from "bun:test";
 import {
   buildFdArgs,
   buildRgArgs,

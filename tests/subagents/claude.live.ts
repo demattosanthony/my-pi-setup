@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { test } from "bun:test";
 import { Effect } from "effect";
 import { SubagentManager } from "../../extensions/subagents/src/manager.ts";
 import { claudeBackend } from "../../extensions/subagents/src/backends/claude.ts";
@@ -46,15 +46,11 @@ function deadline<A>(operation: Promise<A>, timeoutMs: number) {
   });
 }
 
-test(
-  "Claude backend completes a live manager run",
-  { timeout: 60_000 },
-  async (t) => {
-    if (!(await claudeAvailable())) {
-      t.skip("Claude Code executable is unavailable");
-      return;
-    }
+const liveTest = (await claudeAvailable()) ? test : test.skip;
 
+liveTest(
+  "Claude backend completes a live manager run",
+  async () => {
     const runtime = createSubagentRuntime();
     try {
       const manager = await runtime.runPromise(SubagentManager);
@@ -73,17 +69,12 @@ test(
       await runtime.dispose();
     }
   },
+  { timeout: 60_000 },
 );
 
-test(
+liveTest(
   "Claude backend interrupt settles a live run as aborted",
-  { timeout: 60_000 },
-  async (t) => {
-    if (!(await claudeAvailable())) {
-      t.skip("Claude Code executable is unavailable");
-      return;
-    }
-
+  async () => {
     const runtime = createSubagentRuntime();
     try {
       const manager = await runtime.runPromise(SubagentManager);
@@ -122,4 +113,5 @@ test(
       await runtime.dispose();
     }
   },
+  { timeout: 60_000 },
 );

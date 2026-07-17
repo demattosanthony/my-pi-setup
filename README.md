@@ -2,7 +2,7 @@
 
 This is my opinionated [Pi](https://pi.dev) setup. It:
 
-- uses the GitHub Dark Default theme
+- uses Carbonfox as default theme
 - adds a custom header and footer
 - adds an ask-user tool for multiple-choice questions
 - adds first-class `fd` and `rg` tools

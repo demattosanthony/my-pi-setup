@@ -29,8 +29,8 @@ import {
   childToolPolicy,
   createChildResources,
   shutdownAndDisposeChildSession,
-} from "../shared/child-session.ts";
-import { createToolCallTimeoutGuard } from "../shared/tool-call-timeout.ts";
+} from "./child-session.ts";
+import { createToolCallTimeoutGuard } from "./tool-call-timeout.ts";
 import { emptyUsage, type AgentUsage, type TranscriptEntry } from "./model.ts";
 import {
   buildWorkflowAgentPrompt,

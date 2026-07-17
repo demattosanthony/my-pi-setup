@@ -8,7 +8,7 @@ import {
   truncateHead,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { formatContextUtilization } from "../shared/context-utilization.ts";
+import { formatContextUtilization } from "./context-utilization.ts";
 import { safeStringify } from "./serialization.ts";
 
 export type Theme = ExtensionContext["ui"]["theme"];

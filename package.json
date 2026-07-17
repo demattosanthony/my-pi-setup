@@ -44,7 +44,7 @@
     "check": "effect-tsgo patch && tsc --noEmit",
     "format": "prettier --write \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
     "format:check": "prettier --check \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
-    "test": "node --test --experimental-strip-types extensions/file-search/*.test.ts extensions/shared/*.test.ts extensions/workflows/*.test.ts && npm run test --workspaces --if-present"
+    "test": "node --test --experimental-strip-types extensions/file-search/*.test.ts extensions/workflows/*.test.ts && npm run test --workspaces --if-present"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

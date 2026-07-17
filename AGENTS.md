@@ -1,14 +1,13 @@
-When working in typescript:
+# Repository instructions
 
-- when adding a package to a project add it with an install command, instead of manually editing the package json
-- run check/format/lint commands when your done making a change. if they don't exist, suggest making them for the project you're in
-- avoid explicit return types unless absolutely needed
-- `as any` should be an absolute last resort. always use real type safety. lean on type inference instead of manually writing new types over and over again
+This repository is the source of truth for a live Pi setup.
 
-When working in svelte(kit):
-
-- use modern svelte practices, reference the svelte best practicies skill when writing .svelte file code
-
-In general:
-
-- when asking questions, ask them one at a time
+- Never commit authentication, API keys, `.env` files, sessions, trust decisions, run history, package caches, workflow artifacts, or downloaded binaries.
+- Add dependencies with npm commands rather than manually editing dependency versions.
+- Keep Pi resource entry points explicit in the root `package.json` manifest.
+- Preserve compatibility with the Pi version documented by the lockfile and run `npm install` after dependency changes.
+- Run `npm run format:check`, `npm run check`, and `npm test` after code changes.
+- Keep live Claude Code and Codex tests opt-in; routine tests must not unexpectedly consume provider usage.
+- Treat changes to subagent permissions, workflow sandboxing, tool registration, and runtime configuration as security-sensitive.
+- Keep `config/` free of secrets. Use environment-variable references for credentials.
+- Update `README.md` or `SETUP.md` when the installation or reload workflow changes.

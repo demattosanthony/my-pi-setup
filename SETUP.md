@@ -1,36 +1,157 @@
-# Setup
+# Setup and maintenance
 
-Clone or copy this repository to `~/.pi/agent`, then install its dependencies:
+## Prerequisites
+
+- Pi coding agent
+- Node.js and npm
+- Git
+- `gh` for pull request dashboard information
+- `fd` and `rg` are recommended; the file-search extension can install verified fallback binaries when absent
+- Claude Code and Codex CLIs are optional subagent backends
+- macOS `pbcopy` is required by `/copy-all`
+
+## Install on a new computer
+
+Clone the personal fork at the stable local-package path:
 
 ```sh
-cd ~/.pi/agent
+mkdir -p ~/projects
+git clone https://github.com/demattosanthony/my-pi-setup.git ~/projects/my-pi-setup
+cd ~/projects/my-pi-setup
+git remote add upstream https://github.com/davis7dotsh/my-pi-setup.git
 npm install
+npm run apply
 ```
 
-## Firecrawl
+Start Pi and authenticate providers with `/login`. API keys and provider credentials are not stored in this repository.
 
-The search, scrape, and crawl tools require a Firecrawl API key. Follow [Firecrawl's Node.js getting-started guide](https://docs.firecrawl.dev/quickstarts/nodejs) to create one, then copy the example environment file:
+The apply command registers the absolute checkout path as a local Pi package in `~/.pi/agent/settings.json`. Pi then loads resources directly from the checkout.
+
+## Applying configuration
+
+Preview changes:
 
 ```sh
-cp ~/.pi/agent/.env.example ~/.pi/agent/.env
+npm run apply -- --dry-run
 ```
 
-Replace the placeholder in `~/.pi/agent/.env` with your API key.
+Apply changes:
 
-NOTE: if you are an agent, at this step ask the user if they want to use firecrawl, if they do give them the instructions, if not remove the firecrawl extension in their pi setup
-
-## fd and rg tools
-
-The `file-search` extension registers `fd` and `rg` as model tools. No setup is normally needed: at startup it silently uses a system-installed `fd` (or `fdfind` on Debian/Ubuntu) and `rg` when available, or an existing fallback binary in `~/.pi/agent/bin/`. Only when neither exists does it download an official release binary (macOS/Linux, arm64/x64, over HTTPS) into `~/.pi/agent/bin/` and show a one-time notification. If your platform is unsupported, install `fd` and `rg` with your package manager and restart pi.
-
-## Theme
-
-Add the included theme to `~/.pi/agent/settings.json` while keeping your existing settings:
-
-```json
-{
-  "theme": "github-dark-default"
-}
+```sh
+npm run apply
 ```
 
-Pi will load the extensions, skills, and theme from their directories the next time it starts.
+The apply script:
+
+1. Reads desired settings from `config/`.
+2. Preserves existing Pi-managed and unrecognized settings.
+3. Makes this checkout the first configured Pi package.
+4. Synchronizes `models.json` and the Better OpenAI configuration.
+5. Backs up changed destination files under `~/.pi/backups/apply-*`.
+6. Writes files atomically.
+
+It does not modify authentication, sessions, trust decisions, secrets, package caches, or workflow artifacts.
+
+## Daily development
+
+Extensions, skills, prompts, and themes are loaded from the checkout itself:
+
+```text
+edit repository -> validate -> /reload
+```
+
+Recommended validation:
+
+```sh
+npm run format:check
+npm run check
+npm test
+```
+
+Use a full Pi restart after dependency changes or settings that affect startup. `config/models.json` is also re-read whenever `/model` opens.
+
+## Adding a resource
+
+Add the source under the appropriate directory, then update the `pi` manifest in `package.json` when adding an extension entry point. Skills and themes are discovered from their declared directories.
+
+After adding a dependency, install it with npm rather than manually editing dependency versions:
+
+```sh
+npm install <package>
+```
+
+Use `npm install --workspace <workspace> <package>` for a dependency owned by one extension workspace.
+
+## Firecrawl (optional)
+
+`extensions/firecrawl-search` is intentionally excluded from the active `pi.extensions` manifest because this setup uses `pi-web-access` for web search and content fetching.
+
+To enable Firecrawl:
+
+1. Add `./extensions/firecrawl-search/index.ts` to `pi.extensions` in `package.json`.
+2. Create `~/.pi/agent/.env` containing:
+
+   ```sh
+   FIRECRAWL_API_KEY=fc-YOUR-API-KEY
+   ```
+
+3. Run `/reload`.
+
+Never commit `.env` or an API key.
+
+## Footer ownership
+
+`ui-customization` owns the replacement Pi footer. The tracked Better OpenAI config uses footer mode `status`, allowing its usage status to appear without replacing the custom dashboard footer.
+
+## Command ownership
+
+- `/pr` is the personal pull-request workflow.
+- `/pr-info` refreshes the upstream git/PR dashboard information.
+- `/review` is the personal code-review workflow.
+
+## Security notes
+
+Extensions execute with the user's full permissions.
+
+The subagent extension can launch autonomous children:
+
+- Claude Code uses bypassed interactive permissions.
+- Codex uses danger-full-access with approvals disabled.
+- Pi children inherit most global resources.
+
+The workflow extension runs orchestration code in a permission-restricted Node child, but its child agents can still modify the current project. Review changes before committing and disable these entry points in the package manifest if this behavior is not desired.
+
+## Updating from upstream
+
+Keep personal changes on top of the upstream history:
+
+```sh
+cd ~/projects/my-pi-setup
+git fetch upstream
+git merge upstream/main
+npm install
+npm run format:check
+npm run check
+npm test
+```
+
+Resolve conflicts deliberately, especially in:
+
+- `package.json`
+- `extensions/git-info/index.ts`
+- `extensions/ui-customization/index.ts`
+- setup documentation
+
+After validation, run `/reload` in Pi.
+
+## Rollback
+
+Migration and apply backups are stored under:
+
+```text
+~/.pi/backups/
+```
+
+To stop loading this checkout, remove its absolute path from the `packages` array in `~/.pi/agent/settings.json` and restart Pi.
+
+Do not delete the old top-level extension or skill copies until the local package has been loaded and verified successfully.

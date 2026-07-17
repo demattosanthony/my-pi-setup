@@ -8,7 +8,7 @@ bin/
 sessions/
 /workflows/
 auth.json
-settings.json
+/settings.json
 trust.json
 models-store.json
 

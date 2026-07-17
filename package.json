@@ -1,10 +1,42 @@
 {
+  "name": "anthony-pi-setup",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Anthony DeMattos' version-controlled Pi setup",
+  "keywords": [
+    "pi-package"
+  ],
+  "workspaces": [
+    "extensions/*"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/ask-user/index.ts",
+      "./extensions/background-terminals/index.ts",
+      "./extensions/copy-all/index.ts",
+      "./extensions/file-search/index.ts",
+      "./extensions/git-info/index.ts",
+      "./extensions/model-info/index.ts",
+      "./extensions/subagents/index.ts",
+      "./extensions/ui-customization/index.ts",
+      "./extensions/workflows/index.ts",
+      "./extensions/code-review/index.ts",
+      "./extensions/pull-request-workflow.ts"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "themes": [
+      "./themes"
+    ]
+  },
   "dependencies": {
     "@earendil-works/pi-ai": "^0.80.6",
     "@earendil-works/pi-coding-agent": "^0.80.6",
     "@earendil-works/pi-tui": "^0.80.6",
     "acorn": "^8.17.0",
     "firecrawl": "^4.30.0",
+    "ioredis": "^5.11.1",
     "typebox": "^1.3.6"
   },
   "devDependencies": {
@@ -14,9 +46,11 @@
   },
   "type": "module",
   "scripts": {
+    "apply": "node scripts/apply.mjs",
     "check": "tsc --noEmit",
-    "format": "prettier --write \"extensions/**/*.{ts,cjs}\" \"*.json\"",
-    "format:check": "prettier --check \"extensions/**/*.{ts,cjs}\" \"*.json\"",
-    "test": "node --test --experimental-strip-types extensions/*/*.test.ts && npm --prefix extensions/file-search test"
+    "format": "prettier --write \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
+    "format:check": "prettier --check \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
+    "test": "node --test --experimental-strip-types extensions/shared/*.test.ts extensions/workflows/*.test.ts && npm run test --workspaces --if-present",
+    "prepare": "effect-tsgo patch"
   }
 }

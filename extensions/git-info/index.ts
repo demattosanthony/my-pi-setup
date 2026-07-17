@@ -247,8 +247,8 @@ export default function gitInfo(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerCommand("pr", {
-    description: "Refresh git and pull request information",
+  pi.registerCommand("pr-info", {
+    description: "Refresh git and pull request dashboard information",
     handler: async (_args, ctx) => {
       await runEffect(getRuntime(), refresh(ctx, true), {
         signal: ctx.signal,

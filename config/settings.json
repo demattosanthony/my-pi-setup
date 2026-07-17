@@ -1,0 +1,14 @@
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.6-sol",
+  "defaultThinkingLevel": "high",
+  "theme": "github-dark-default",
+  "packages": [
+    "git:github.com/mattleong/pi-better-openai",
+    {
+      "source": "npm:pi-web-access",
+      "skills": []
+    },
+    "npm:pi-cmux"
+  ]
+}

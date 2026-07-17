@@ -491,7 +491,6 @@ views are exercised end to end:
     ├── read-model.ts          # sync SubagentReadModel bridge for the TUI
     ├── runtime.ts             # AppLayer composition + ManagedRuntime create/dispose helpers
     ├── result-delivery.ts     # deferred delivery buffer (copied from v1, unchanged)
-    ├── result-delivery.test.ts
     ├── prompt.ts              # all model-facing strings (v1 copy + `agent` param description)
     ├── format.ts              # elapsed/context-utilization/activity-status formatting
     │                          # (merged copies of ../shared/{context-utilization,activity-status}.ts)
@@ -499,6 +498,8 @@ views are exercised end to end:
         ├── transcript.ts      # sanitize + buildTranscriptLines over SubagentSnapshot
         └── takeover.ts        # SubagentDashboard + TakeoverView + openSubagentPicker (ported)
 ```
+
+Tests live separately under `tests/subagents/`, including `result-delivery.test.ts`.
 
 Notes:
 - `package.json` is needed because `effect` is an npm dependency (extension-with-deps
@@ -508,9 +509,8 @@ Notes:
   `backends/pi.ts` when implemented. The `resolveStandaloneChildProjectTrust` logic *is*
   still referenced by the design (SpawnTask.parentContext.projectTrusted) so the tool
   layer computes trust the same way v1 does.
-- Suggested project scripts (per house rules, to be added): `check` (`tsc --noEmit`),
-  `test` (`node --test` or vitest for `result-delivery` + manager fold tests against
-  stub backends).
+- Repository scripts run tests from the root `tests/` tree; provider-usage tests use
+  the `*.live.test.ts` suffix and remain opt-in.
 
 ---
 

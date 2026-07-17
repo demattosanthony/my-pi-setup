@@ -21,7 +21,7 @@ import {
   resolveStandaloneChildProjectTrust,
   shutdownAndDisposeChildSession,
   type DisposableChildSession,
-} from "./child-session.ts";
+} from "../../extensions/workflows/child-session.ts";
 
 async function withTempDir(run: (directory: string) => Promise<void>) {
   const directory = await mkdtemp(path.join(tmpdir(), "pi-child-policy-"));

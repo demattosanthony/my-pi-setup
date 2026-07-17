@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   reconcileDashboardSelection,
   type DashboardSelection,
-} from "./src/ui/takeover.ts";
+} from "../../extensions/subagents/src/ui/takeover.ts";
 
 test("dashboard selection follows its subagent id and falls back by row", () => {
   const selection: DashboardSelection = { id: "sa-7", index: 6 };

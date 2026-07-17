@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { contextOccupancyTokens } from "./src/backends/claude.ts";
-import { parseThreadTokenUsage } from "./src/backends/codex.ts";
+import { contextOccupancyTokens } from "../../extensions/subagents/src/backends/claude.ts";
+import { parseThreadTokenUsage } from "../../extensions/subagents/src/backends/codex.ts";
 
 // --- Claude: per-request occupancy, never the run aggregate ------------------
 

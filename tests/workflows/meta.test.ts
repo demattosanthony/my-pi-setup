@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { extractMeta, prepareWorkflowScript } from "./meta.ts";
+import {
+  extractMeta,
+  prepareWorkflowScript,
+} from "../../extensions/workflows/meta.ts";
 
 test("metadata is decoded statically and removed from executable source", () => {
   const source = `export const meta = {

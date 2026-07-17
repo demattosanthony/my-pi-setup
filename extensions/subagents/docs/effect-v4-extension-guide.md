@@ -52,7 +52,6 @@ setup — do **not** float the versions.
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit -p .",
-    "prepare": "effect-tsgo patch", // patches the Effect LS into the tsgo binary
   },
   "dependencies": {
     "effect": "4.0.0-beta.98", // EXACT pin, no ^
@@ -73,9 +72,12 @@ setup — do **not** float the versions.
   "compilerOptions": {
     "plugins": [{ "name": "@effect/language-service" }],
   },
-  "include": ["index.ts", "src/**/*.ts", "*.test.ts"],
+  "include": ["index.ts", "src/**/*.ts"],
 }
 ```
+
+Keep tests under `../../tests/<extension>/`; the root `tsconfig.json` includes
+`tests/**/*.ts`, and the repository test runner discovers them recursively.
 
 The root `tsconfig.json` already sets `strict`, `module`/`moduleResolution: NodeNext`,
 `verbatimModuleSyntax`, `allowImportingTsExtensions`, `target: ES2022`, `types: ["node"]`.

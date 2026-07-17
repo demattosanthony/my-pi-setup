@@ -3,7 +3,7 @@ import { test } from "node:test";
 import {
   contextPercent,
   formatContextUtilization,
-} from "./context-utilization.ts";
+} from "../../extensions/workflows/context-utilization.ts";
 
 test("formats current context occupancy against model capacity", () => {
   assert.equal(

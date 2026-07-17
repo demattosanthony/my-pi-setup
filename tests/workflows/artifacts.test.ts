@@ -7,12 +7,12 @@ import {
   boundedArtifactTranscript,
   createWorkflowPersistence,
   persistWorkflowJson,
-} from "./artifacts.ts";
+} from "../../extensions/workflows/artifacts.ts";
 import {
   emptyUsage,
   type TranscriptEntry,
   type WorkflowDetails,
-} from "./model.ts";
+} from "../../extensions/workflows/model.ts";
 
 function workflowDetails(): WorkflowDetails {
   return {

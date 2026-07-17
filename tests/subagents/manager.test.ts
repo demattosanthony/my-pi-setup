@@ -9,16 +9,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Effect, Layer, ManagedRuntime } from "effect";
-import { BackendRegistry, type SubagentBackend } from "./src/backend.ts";
-import { piBackend } from "./src/backends/pi.ts";
-import { makeStubBackend } from "./src/backends/stub.ts";
-import type { BackendName, ParentContext, SpawnTask } from "./src/domain.ts";
+import {
+  BackendRegistry,
+  type SubagentBackend,
+} from "../../extensions/subagents/src/backend.ts";
+import { piBackend } from "../../extensions/subagents/src/backends/pi.ts";
+import { makeStubBackend } from "../../extensions/subagents/src/backends/stub.ts";
+import type {
+  BackendName,
+  ParentContext,
+  SpawnTask,
+} from "../../extensions/subagents/src/domain.ts";
 import {
   SubagentManager,
   SubagentManagerLive,
   type SubagentManagerShape,
-} from "./src/manager.ts";
-import { runTool } from "./src/runtime.ts";
+} from "../../extensions/subagents/src/manager.ts";
+import { runTool } from "../../extensions/subagents/src/runtime.ts";
 
 const TestRegistryLive = Layer.sync(BackendRegistry, () => {
   const backends: SubagentBackend[] = [

@@ -8,7 +8,7 @@ import {
   buildRgArgs,
   FD_DEFAULT_LIMIT,
   normalizeSearchPath,
-} from "./src/args.ts";
+} from "../../extensions/file-search/src/args.ts";
 import {
   FD_INTEL_DARWIN_VERSION,
   InstallError,
@@ -20,10 +20,16 @@ import {
   type BinaryEnv,
   type ReleaseAsset,
   type ResolvedBinary,
-} from "./src/binaries.ts";
-import { formatCapturedOutput, formatOutput } from "./src/output.ts";
-import { executeSearchProcess } from "./src/process.ts";
-import { installNotifications, makeBinaryInitializers } from "./index.ts";
+} from "../../extensions/file-search/src/binaries.ts";
+import {
+  formatCapturedOutput,
+  formatOutput,
+} from "../../extensions/file-search/src/output.ts";
+import { executeSearchProcess } from "../../extensions/file-search/src/process.ts";
+import {
+  installNotifications,
+  makeBinaryInitializers,
+} from "../../extensions/file-search/index.ts";
 
 test("fd builds safe arguments with defaults and options", () => {
   assert.deepEqual(buildFdArgs({}), [

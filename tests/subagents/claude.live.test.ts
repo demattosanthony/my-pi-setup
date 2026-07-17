@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { Effect } from "effect";
-import { SubagentManager } from "./src/manager.ts";
-import { claudeBackend } from "./src/backends/claude.ts";
-import type { ParentContext, SpawnTask } from "./src/domain.ts";
-import { createSubagentRuntime, runTool } from "./src/runtime.ts";
+import { SubagentManager } from "../../extensions/subagents/src/manager.ts";
+import { claudeBackend } from "../../extensions/subagents/src/backends/claude.ts";
+import type {
+  ParentContext,
+  SpawnTask,
+} from "../../extensions/subagents/src/domain.ts";
+import {
+  createSubagentRuntime,
+  runTool,
+} from "../../extensions/subagents/src/runtime.ts";
 
 const parent: ParentContext = {
   parentCwd: process.cwd(),

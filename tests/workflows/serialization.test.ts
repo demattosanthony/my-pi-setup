@@ -3,7 +3,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { safeStringify, writeFileAtomic } from "./serialization.ts";
+import {
+  safeStringify,
+  writeFileAtomic,
+} from "../../extensions/workflows/serialization.ts";
 
 test("safeStringify handles cycles, bigint, depth, and size", () => {
   const value: Record<string, unknown> = {

@@ -6,6 +6,7 @@ This repository is the source of truth for a live Pi setup.
 - Add dependencies with npm commands rather than manually editing dependency versions.
 - Keep Pi resource entry points explicit in the root `package.json` manifest.
 - Preserve compatibility with the Pi version documented by the lockfile and run `npm install` after dependency changes.
+- Keep all tests under the root `tests/` directory, grouped by feature. Name provider-usage tests `*.live.test.ts`.
 - Run `npm run format:check`, `npm run check`, and `npm test` after code changes.
 - Keep live Claude Code and Codex tests opt-in; routine tests must not unexpectedly consume provider usage.
 - Treat changes to subagent permissions, workflow sandboxing, tool registration, and runtime configuration as security-sensitive.

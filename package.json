@@ -42,9 +42,11 @@
   "scripts": {
     "apply": "node scripts/apply.mjs",
     "check": "effect-tsgo patch && tsc --noEmit",
-    "format": "prettier --write \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
-    "format:check": "prettier --check \"extensions/**/*.{ts,cjs}\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
-    "test": "node --test --experimental-strip-types extensions/file-search/*.test.ts extensions/workflows/*.test.ts && npm run test --workspaces --if-present"
+    "format": "prettier --write \"extensions/**/*.{ts,cjs}\" \"tests/**/*.ts\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
+    "format:check": "prettier --check \"extensions/**/*.{ts,cjs}\" \"tests/**/*.ts\" \"scripts/**/*.mjs\" \"config/**/*.json\" \"*.json\"",
+    "test": "node scripts/test.mjs",
+    "test:live": "node scripts/test.mjs --live",
+    "test:list": "node scripts/test.mjs --list"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": "*",

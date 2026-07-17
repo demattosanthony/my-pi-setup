@@ -4,7 +4,7 @@ import {
   BTW_TITLE_MAX_LENGTH,
   deriveBtwTitle,
   isModelVisible,
-} from "./src/by-the-way.ts";
+} from "../../extensions/subagents/src/by-the-way.ts";
 
 test("deriveBtwTitle uses the first non-empty line and bounds the title", () => {
   assert.equal(

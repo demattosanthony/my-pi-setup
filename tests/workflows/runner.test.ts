@@ -12,7 +12,7 @@ import {
   recordToolExecutionTiming,
   transcriptFromMessages,
   type ToolExecutionTiming,
-} from "./runner.ts";
+} from "../../extensions/workflows/runner.ts";
 
 const zeroUsage = {
   input: 0,

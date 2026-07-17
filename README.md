@@ -67,7 +67,9 @@ npm install          # Install all root and extension workspace dependencies
 npm run apply        # Apply tracked configuration to ~/.pi/agent
 npm run apply -- --dry-run
 npm run check        # Type-check all extensions
-npm test             # Run non-live tests
+npm test             # Discover and run routine tests under tests/
+npm run test:list    # List every routine/live test discovered under tests/
+npm run test:live    # Run opt-in provider integration tests
 npm run format       # Format tracked source/config
 npm run format:check
 ```
@@ -75,7 +77,7 @@ npm run format:check
 Live Claude Code and Codex subagent tests remain opt-in:
 
 ```sh
-npm run test:live --workspace subagents
+npm run test:live
 ```
 
 See [SETUP.md](SETUP.md) for initial installation, migration, rollback, and upstream update instructions.

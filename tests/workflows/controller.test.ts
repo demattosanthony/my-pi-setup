@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MAX_AGENT_CALLS, RunController } from "./controller.ts";
+import {
+  MAX_AGENT_CALLS,
+  RunController,
+} from "../../extensions/workflows/controller.ts";
 
 const delay = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));

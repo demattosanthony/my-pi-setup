@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { runWorkflowSandbox } from "./sandbox.ts";
+import { runWorkflowSandbox } from "../../extensions/workflows/sandbox.ts";
 
 function run(
   source: string,

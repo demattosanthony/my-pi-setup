@@ -18,7 +18,7 @@
       "./extensions/ui-customization/index.ts",
       "./extensions/workflows/index.ts",
       "./extensions/code-review/index.ts",
-      "./extensions/pull-request-workflow.ts"
+      "./extensions/pull-request/index.ts"
     ],
     "skills": [
       "./skills"

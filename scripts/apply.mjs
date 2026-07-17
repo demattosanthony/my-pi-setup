@@ -117,14 +117,16 @@ await synchronizeJson(settingsSource, settingsDestination, async (desired) => {
   return merged;
 });
 
-await synchronizeJson(
-  join(repoRoot, "config", "models.json"),
-  join(agentDir, "models.json"),
+const betterOpenAiDestination = join(
+  agentDir,
+  "extensions",
+  "pi-better-openai.json",
 );
-
 await synchronizeJson(
   join(repoRoot, "config", "pi-better-openai.json"),
-  join(agentDir, "extensions", "pi-better-openai.json"),
+  betterOpenAiDestination,
+  async (desired) =>
+    mergeSettings(await readJson(betterOpenAiDestination, {}), desired),
 );
 
 if (backupCreated) console.log(`backup    ${backupDir}`);

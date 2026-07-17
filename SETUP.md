@@ -5,10 +5,8 @@
 - Pi coding agent
 - Node.js and npm
 - Git
-- `gh` for pull request dashboard information
 - `fd` and `rg` are recommended; the file-search extension can install verified fallback binaries when absent
 - Claude Code and Codex CLIs are optional subagent backends
-- macOS `pbcopy` is required by `/copy-all`
 
 ## Install on a new computer
 
@@ -46,7 +44,7 @@ The apply script:
 1. Reads desired settings from `config/`.
 2. Preserves existing Pi-managed and unrecognized settings.
 3. Makes this checkout the first configured Pi package.
-4. Synchronizes `models.json` and the Better OpenAI configuration.
+4. Merges stable Better OpenAI preferences without resetting its dynamic runtime state.
 5. Backs up changed destination files under `~/.pi/backups/apply-*`.
 6. Writes files atomically.
 
@@ -68,7 +66,7 @@ npm run check
 npm test
 ```
 
-Use a full Pi restart after dependency changes or settings that affect startup. `config/models.json` is also re-read whenever `/model` opens.
+Use a full Pi restart after dependency changes or settings that affect startup.
 
 ## Adding a resource
 
@@ -82,32 +80,14 @@ npm install <package>
 
 Use `npm install --workspace <workspace> <package>` for a dependency owned by one extension workspace.
 
-## Firecrawl (optional)
-
-`extensions/firecrawl-search` is intentionally excluded from the active `pi.extensions` manifest because this setup uses `pi-web-access` for web search and content fetching.
-
-To enable Firecrawl:
-
-1. Add `./extensions/firecrawl-search/index.ts` to `pi.extensions` in `package.json`.
-2. Create `~/.pi/agent/.env` containing:
-
-   ```sh
-   FIRECRAWL_API_KEY=fc-YOUR-API-KEY
-   ```
-
-3. Run `/reload`.
-
-Never commit `.env` or an API key.
-
 ## Footer ownership
 
 `ui-customization` owns the replacement Pi footer. The tracked Better OpenAI config uses footer mode `status`, allowing its usage status to appear without replacing the custom dashboard footer.
 
 ## Command ownership
 
-- `/pr` is the personal pull-request workflow.
-- `/pr-info` refreshes the upstream git/PR dashboard information.
-- `/review` is the personal code-review workflow.
+- `/pr` and `/pull-request` run the personal pull-request workflow.
+- `/review` runs the personal code-review workflow.
 
 ## Security notes
 
@@ -138,7 +118,6 @@ npm test
 Resolve conflicts deliberately, especially in:
 
 - `package.json`
-- `extensions/git-info/index.ts`
 - `extensions/ui-customization/index.ts`
 - setup documentation
 

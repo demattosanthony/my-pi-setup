@@ -5,32 +5,9 @@ import type {
   ExtensionContext,
   ReadonlyFooterDataProvider,
 } from "@earendil-works/pi-coding-agent";
-import {
-  getCapabilities,
-  hyperlink,
-  truncateToWidth,
-  visibleWidth,
-} from "@earendil-works/pi-tui";
-import {
-  emptyGitInfoState,
-  emptyModelInfoState,
-  GIT_INFO_CHANNEL,
-  MODEL_INFO_CHANNEL,
-  REFRESH_CHANNEL,
-  isGitInfoState,
-  isModelInfoState,
-} from "../shared/dashboard-state.ts";
+import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 type Rgb = [number, number, number];
-interface RenderableNode {
-  children?: RenderableNode[];
-  invalidate(): void;
-  render(width: number): string[];
-}
-
-interface DashboardTui extends RenderableNode {
-  requestRender(force?: boolean): void;
-}
 
 const RESET = "\x1b[0m";
 const BOLD = "\x1b[1m";
@@ -50,8 +27,6 @@ const TITLE_LINES = [
   "  ██║      ██║ ",
   "  ╚═╝      ╚═╝ ",
 ];
-const ANSI_PATTERN =
-  /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g;
 
 function mix(a: number, b: number, amount: number) {
   return Math.round(a + (b - a) * amount);
@@ -90,47 +65,6 @@ function gradientText(text: string, phase: number) {
     .join("");
 }
 
-function hasChildren(
-  component: RenderableNode,
-): component is RenderableNode & { children: RenderableNode[] } {
-  return Array.isArray(component.children);
-}
-
-function renderedText(component: RenderableNode) {
-  try {
-    return component.render(200).join("\n").replace(ANSI_PATTERN, "");
-  } catch {
-    return "";
-  }
-}
-
-function hideThemesSection(component: RenderableNode) {
-  if (!hasChildren(component)) return false;
-
-  for (let index = 0; index < component.children.length; index += 1) {
-    const child = component.children[index]!;
-    const firstLine = renderedText(child)
-      .split("\n")
-      .find((line) => line.trim())
-      ?.trim();
-
-    if (firstLine === "[Themes]") {
-      const removeCount =
-        component.children[index + 1] &&
-        renderedText(component.children[index + 1]!).trim() === ""
-          ? 2
-          : 1;
-      component.children.splice(index, removeCount);
-      component.invalidate();
-      return true;
-    }
-
-    if (hideThemesSection(child)) return true;
-  }
-
-  return false;
-}
-
 function formatTokens(tokens: number) {
   if (tokens < 1_000) return `${tokens}`;
   if (tokens < 1_000_000) return `${Math.round(tokens / 1_000)}k`;
@@ -142,6 +76,16 @@ function formatDirectory(cwd: string) {
   if (cwd === home) return "~";
   if (cwd.startsWith(`${home}/`)) return `~/${relative(home, cwd)}`;
   return cwd;
+}
+
+function sessionCost(ctx: ExtensionContext) {
+  let cost = 0;
+  for (const entry of ctx.sessionManager.getBranch()) {
+    if (entry.type === "message" && entry.message.role === "assistant") {
+      cost += entry.message.usage.cost.total;
+    }
+  }
+  return cost;
 }
 
 function center(text: string, width: number) {
@@ -169,145 +113,84 @@ function columns(left: string, right: string, width: number) {
   );
 }
 
-export default function uiCustomization(pi: ExtensionAPI) {
-  let title = "pi";
-  let modelInfo = emptyModelInfoState();
-  let gitInfo = emptyGitInfoState();
-  let requestRender: (() => void) | undefined;
-  let activeTui: DashboardTui | undefined;
-  let themeRemovalTimers: Array<ReturnType<typeof setTimeout>> = [];
+function footerLines(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  footerData: ReadonlyFooterDataProvider,
+  width: number,
+) {
+  const theme = ctx.ui.theme;
+  const usage = ctx.getContextUsage();
+  const contextPercent =
+    usage?.percent === null || usage?.percent === undefined
+      ? "?"
+      : `${Math.round(usage.percent)}`;
+  const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
+  const context = `${contextPercent}%/${contextWindow ? formatTokens(contextWindow) : "?"}`;
+  const model = ctx.model
+    ? `${ctx.model.provider}/${ctx.model.id} · ${pi.getThinkingLevel()}`
+    : "no model";
+  const branch = footerData.getGitBranch();
 
-  const stopModelListener = pi.events.on(MODEL_INFO_CHANNEL, (value) => {
-    if (!isModelInfoState(value)) return;
-    modelInfo = value;
-    requestRender?.();
-  });
+  const lines = [
+    columns(
+      theme.fg("text", formatDirectory(ctx.cwd)),
+      theme.fg("muted", model),
+      width,
+    ),
+    columns(
+      theme.fg("muted", `${context} · $${sessionCost(ctx).toFixed(2)}`),
+      theme.fg("muted", branch ?? ""),
+      width,
+    ),
+  ];
 
-  const stopGitListener = pi.events.on(GIT_INFO_CHANNEL, (value) => {
-    if (!isGitInfoState(value)) return;
-    gitInfo = value;
-    requestRender?.();
-  });
-
-  function scheduleThemeRemoval(tui: DashboardTui) {
-    for (const timer of themeRemovalTimers) clearTimeout(timer);
-    themeRemovalTimers = [];
-
-    for (const delay of [0, 50, 250, 1_000]) {
-      themeRemovalTimers.push(
-        setTimeout(() => {
-          if (hideThemesSection(tui)) tui.requestRender(true);
-        }, delay),
-      );
+  for (const [, text] of [...footerData.getExtensionStatuses()].sort(
+    ([a], [b]) => a.localeCompare(b),
+  )) {
+    for (const line of text.split("\n")) {
+      lines.push(truncateToWidth(line, width, theme.fg("dim", "...")));
     }
   }
 
-  function install(ctx: ExtensionContext) {
+  return lines;
+}
+
+export default function uiCustomization(pi: ExtensionAPI) {
+  pi.on("session_start", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
 
-    ctx.ui.setHeader((tui) => {
-      activeTui = tui;
-      requestRender = () => tui.requestRender();
-      scheduleThemeRemoval(tui);
+    const title = formatDirectory(ctx.cwd);
+    ctx.ui.setHeader(() => ({
+      render(width: number) {
+        const art = TITLE_LINES.map((line, row) =>
+          center(gradientText(line, row * 0.045), width),
+        );
+        return [
+          "",
+          ...art,
+          center(`${BOLD}${gradientText(title, 0.18)}${RESET}`, width),
+          "",
+        ];
+      },
+      invalidate() {},
+    }));
 
+    ctx.ui.setFooter((tui, _theme, footerData) => {
+      const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
       return {
-        render(width: number) {
-          const art = TITLE_LINES.map((line, row) =>
-            center(gradientText(line, row * 0.045), width),
-          );
-          const subtitle = center(
-            `${BOLD}${gradientText(title, 0.18)}${RESET}`,
-            width,
-          );
-          return ["", ...art, subtitle, ""];
-        },
+        dispose: unsubscribe,
         invalidate() {},
-      };
-    });
-
-    ctx.ui.setFooter((tui, theme, footerData: ReadonlyFooterDataProvider) => {
-      requestRender = () => tui.requestRender();
-
-      return {
-        invalidate() {},
-        render(width: number) {
-          const directory = theme.fg("text", formatDirectory(ctx.cwd));
-          const fileLabel = gitInfo.changedFiles === 1 ? "file" : "files";
-          let git = gitInfo.branch
-            ? `${gitInfo.branch} · ${gitInfo.changedFiles} ${fileLabel} changed`
-            : "";
-
-          if (gitInfo.pullRequest) {
-            const prLabel = `PR #${gitInfo.pullRequest.number}`;
-            const linkedPr = getCapabilities().hyperlinks
-              ? hyperlink(prLabel, gitInfo.pullRequest.url)
-              : prLabel;
-            git += ` · ${linkedPr}`;
-          }
-
-          const contextPercent =
-            modelInfo.contextPercent === null
-              ? "?"
-              : `${Math.round(modelInfo.contextPercent)}`;
-          const contextWindow =
-            modelInfo.contextWindow > 0
-              ? formatTokens(modelInfo.contextWindow)
-              : "?";
-          const tps =
-            modelInfo.tokensPerSecond === null
-              ? "— tok/s"
-              : `${Math.round(modelInfo.tokensPerSecond)} tok/s`;
-          const usage = `${contextPercent}%/${contextWindow} · $${modelInfo.cost.toFixed(2)} · ${tps}`;
-          const model = modelInfo.provider
-            ? `${modelInfo.provider}/${modelInfo.modelId} · ${modelInfo.thinking}`
-            : modelInfo.modelId;
-
-          const lines = [
-            columns(directory, theme.fg("muted", model), width),
-            columns(theme.fg("muted", usage), theme.fg("muted", git), width),
-          ];
-
-          // Extension statuses render after the two dashboard lines, one per row.
-          const statuses = footerData.getExtensionStatuses();
-          const statusLines = Array.from(statuses.entries())
-            .sort(([a], [b]) => a.localeCompare(b))
-            .flatMap(([, text]) => text.split("\n"));
-          for (const statusLine of statusLines) {
-            lines.push(
-              truncateToWidth(statusLine, width, theme.fg("dim", "...")),
-            );
-          }
-
-          return lines;
-        },
+        render: (width: number) => footerLines(pi, ctx, footerData, width),
       };
     });
 
     ctx.ui.setTitle(`pi · ${title}`);
-    pi.events.emit(REFRESH_CHANNEL, undefined);
-  }
-
-  pi.on("session_start", (_event, ctx) => {
-    title = formatDirectory(ctx.cwd);
-    modelInfo = emptyModelInfoState();
-    gitInfo = emptyGitInfoState();
-    install(ctx);
-  });
-
-  pi.on("resources_discover", () => {
-    if (activeTui) scheduleThemeRemoval(activeTui);
   });
 
   pi.on("session_shutdown", (_event, ctx) => {
-    stopModelListener();
-    stopGitListener();
-    for (const timer of themeRemovalTimers) clearTimeout(timer);
-    themeRemovalTimers = [];
-    activeTui = undefined;
-    requestRender = undefined;
-    if (ctx.mode === "tui") {
-      ctx.ui.setHeader(undefined);
-      ctx.ui.setFooter(undefined);
-    }
+    if (ctx.mode !== "tui") return;
+    ctx.ui.setHeader(undefined);
+    ctx.ui.setFooter(undefined);
   });
 }

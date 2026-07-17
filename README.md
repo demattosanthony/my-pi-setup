@@ -8,16 +8,13 @@ Pi loads extensions, skills, prompts, and themes directly from this checkout as 
 
 - GitHub Dark Default theme
 - Ask-user multiple-choice tool
-- Background terminal tools and UI
 - `fd` and `rg` model tools
-- Git, pull request, model, and context information
+- Self-contained custom header and footer
 - Pi, Claude Code, and Codex subagents
 - Model-authored multi-agent workflows
-- Conversation copy command
 - Personal code-review and pull-request workflows
-- Personal and upstream skills
-
-Firecrawl source remains available under `extensions/firecrawl-search`, but it is not enabled in the package manifest because `pi-web-access` supplies the active web tools.
+- Personal subagent and framework-upgrade skills
+- `pi-web-access`, `pi-cmux`, and `pi-better-openai` packages
 
 ## Repository and runtime layout
 
@@ -55,7 +52,7 @@ npm test
 
 Then run `/reload` in Pi. Pi reads the changed source directly from this checkout; there is no copy or reinstall step.
 
-After changing `config/settings.json`, `config/models.json`, or `config/pi-better-openai.json`:
+After changing `config/settings.json` or `config/pi-better-openai.json`:
 
 ```sh
 npm run apply

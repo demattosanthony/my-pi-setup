@@ -1,13 +1,4 @@
 {
-  "persistState": true,
-  "active": false,
-  "desiredActive": false,
-  "supportedModels": [
-    "openai/gpt-5.4",
-    "openai/gpt-5.5",
-    "openai-codex/gpt-5.4",
-    "openai-codex/gpt-5.5"
-  ],
   "usage": {
     "enabled": true,
     "refreshIntervalMs": 60000,
@@ -25,15 +16,6 @@
     "timeoutMs": 180000
   },
   "pets": {
-    "enabled": false,
-    "slug": "",
-    "placement": "inline-right",
-    "state": "idle",
-    "thinkingState": "review",
-    "toolState": "running",
-    "failedToolState": "failed",
-    "idleEmotes": true,
-    "idleEmoteIntervalMs": 30000,
-    "sizeCells": 10
+    "enabled": false
   }
 }

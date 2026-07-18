@@ -13,7 +13,6 @@
   "pi": {
     "extensions": [
       "./extensions/ask-user/index.ts",
-      "./extensions/file-search/index.ts",
       "./extensions/subagents/index.ts",
       "./extensions/ui-customization/index.ts",
       "./extensions/workflows/index.ts",

@@ -17,8 +17,10 @@
       "./extensions/subagents/index.ts",
       "./extensions/ui-customization/index.ts",
       "./extensions/workflows/index.ts",
+      "./extensions/diff/index.ts",
       "./extensions/code-review/index.ts",
-      "./extensions/pull-request/index.ts"
+      "./extensions/pull-request/index.ts",
+      "./extensions/call-notes/index.ts"
     ],
     "skills": [
       "./skills"

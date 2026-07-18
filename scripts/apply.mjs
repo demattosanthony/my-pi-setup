@@ -75,9 +75,9 @@ async function backup(path) {
 }
 
 async function writeAtomic(path, content) {
+  if (dryRun) return;
   await mkdir(dirname(path), { recursive: true });
   await backup(path);
-  if (dryRun) return;
 
   const temporaryPath = `${path}.${process.pid}.tmp`;
   await writeFile(temporaryPath, content, "utf8");
@@ -106,7 +106,7 @@ async function synchronizeJson(source, destination, transform) {
   return true;
 }
 
-await mkdir(agentDir, { recursive: true });
+if (!dryRun) await mkdir(agentDir, { recursive: true });
 
 const settingsSource = join(repoRoot, "config", "settings.json");
 const settingsDestination = join(agentDir, "settings.json");
@@ -128,6 +128,27 @@ await synchronizeJson(
   async (desired) =>
     mergeSettings(await readJson(betterOpenAiDestination, {}), desired),
 );
+
+const transcribeSource = join(repoRoot, "scripts", "transcribe-audio.sh");
+const transcribeDestination = join(
+  homedir(),
+  ".local",
+  "bin",
+  "transcribe-audio",
+);
+const transcribeContent = await readFile(transcribeSource, "utf8");
+const installedTranscribeContent = (await exists(transcribeDestination))
+  ? await readFile(transcribeDestination, "utf8")
+  : undefined;
+if (installedTranscribeContent === transcribeContent) {
+  console.log(`unchanged  ${transcribeDestination}`);
+} else {
+  console.log(
+    `${dryRun ? "would update" : "updated  "} ${transcribeDestination}`,
+  );
+  await writeAtomic(transcribeDestination, transcribeContent);
+}
+if (!dryRun) await chmod(transcribeDestination, 0o755);
 
 if (backupCreated) console.log(`backup    ${backupDir}`);
 console.log(

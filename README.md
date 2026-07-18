@@ -5,7 +5,6 @@ This is my opinionated [Pi](https://pi.dev) setup. It:
 - uses Carbonfox as default theme
 - adds a custom header and footer
 - adds an ask-user tool for multiple-choice questions
-- adds first-class `fd` and `rg` tools
 - adds Pi, Claude Code, and Codex subagents
 - adds multi-agent workflows
 - adds a cmux-native `/diff` workflow for reviewing changes beside the Pi chat
@@ -13,7 +12,7 @@ This is my opinionated [Pi](https://pi.dev) setup. It:
 - adds local audio transcription and Markdown call notes with `/call-notes`
 - includes my personal skills and preferred Pi packages
 
-![Pi setup interface](assets/pi-setup.jpeg)
+![Pi setup interface](assets/pi-setup.png)
 
 **Note:** setup instructions are in [`SETUP.md`](SETUP.md).
 
